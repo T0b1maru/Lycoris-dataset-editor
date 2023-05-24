@@ -17,7 +17,7 @@ Lycoris Dataset Editor requires Python 3.7+ to run. Clone this repository to you
 ```
 git clone https://github.com/T0b1maru/Lycoris-dataset-editor.git
 cd lycoris-dataset-editor
-pip install -r requirements.txt
+pip install tkinterdnd2
 ```
 
 
