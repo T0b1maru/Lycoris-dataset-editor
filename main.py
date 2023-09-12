@@ -5,6 +5,8 @@ from tkinter import filedialog
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from tkinter import ttk
 import tkinter.messagebox as messagebox
+import shutil
+import subprocess
 
 class Application(tk.Frame):
     def __init__(self, master=None):
@@ -36,6 +38,55 @@ class Application(tk.Frame):
         self.notebook.add(self.prepare_tab, text="Prepare")
         self.create_prepare_tab()
         
+    def get_folders_list(self):
+        return sorted([folder for folder in os.listdir(self.dir_path) if os.path.isdir(os.path.join(self.dir_path, folder))])
+
+
+    def copy_files(self, foldername):
+        try:
+            src_dir = os.path.join(self.dir_path, foldername, 'input')
+            dest_dir = os.path.join(self.dir_path, foldername, f'img/1_{foldername}')
+
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir)
+
+            files_in_src = os.listdir(src_dir)
+
+            for filename in files_in_src:
+                src_path = os.path.join(src_dir, filename)
+                dest_path = os.path.join(dest_dir, filename)
+
+                # Check if .txt file already exists
+                output_filename = os.path.splitext(filename)[0] + '.txt'
+                output_path = os.path.join(dest_dir, output_filename)
+                if os.path.exists(output_path):
+                    continue  # skip if .txt file already exists
+
+                if os.path.isfile(src_path) and os.access(src_path, os.R_OK):
+                    if os.path.exists(dest_dir) and os.access(dest_dir, os.W_OK):
+                        shutil.copy2(src_path, dest_path)
+
+                        # Run the deepdanbooru command for the copied image
+                        cmd = ["python", "deepdanbooru.py", "--image", dest_path, "--threshold", "0.7", "--ignore", "rating:explicit,rating:safe,rating:questionable,uncensored"]
+                        result = subprocess.run(cmd, capture_output=True, text=True)
+
+                        # Modify the output by adding the foldername to each line
+                        modified_output = "\n".join([f"{foldername}, {line}" for line in result.stdout.strip().split("\n")])
+
+                        # Save the output to a .txt file
+                        with open(output_path, 'w') as output_file:
+                            output_file.write(modified_output)
+                    else:
+                        print(f"Can't write to the destination: {dest_dir}")
+                else:
+                    print(f"Source file does not exist or is not readable: {src_path}")
+            
+            # Display the 'done' popup
+            messagebox.showinfo("Info", "Done!")
+        except Exception as e:
+            print(f"Error during copy: {e}")
+
+
 
     def create_editing_tab(self):
         self.directory = None
@@ -220,6 +271,17 @@ class Application(tk.Frame):
         update_button = ttk.Button(self.prepare_tab, text="Update", command=self.update_folder_path)
         update_button.grid(row=2, column=2, padx=20, pady=10)
 
+        # Dropdown for selecting loraname
+        self.loraname_var = tk.StringVar()
+        self.loraname_dropdown = ttk.Combobox(self.prepare_tab, textvariable=self.loraname_var, values=self.get_folders_list())
+        self.loraname_dropdown.grid(row=3, column=2, padx=20, pady=5, sticky='w')
+
+
+        # Button to initiate copy
+        self.deepdanbooru_button = tk.Button(self.prepare_tab, text="deepdanbooru", command=lambda: self.copy_files(self.loraname_var.get()))
+        self.deepdanbooru_button.grid(row=4, column=2, padx=20, pady=10)
+
+        
     def update_folder_path(self):
         # Use filedialog to select a new folder
         new_folder = filedialog.askdirectory(title="Select Folder")
@@ -387,6 +449,7 @@ class Application(tk.Frame):
             self.text_widgets[text_widget] = file
 
         self.drop_target.pack_forget()  # Hide the drop target
+
 
 
 root = TkinterDnD.Tk()
