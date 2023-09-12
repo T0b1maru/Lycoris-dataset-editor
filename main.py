@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import filedialog
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from tkinter import ttk
+import tkinter.messagebox as messagebox
 
 class Application(tk.Frame):
     def __init__(self, master=None):
@@ -11,6 +12,8 @@ class Application(tk.Frame):
         self.master = master
         self.master.title("Lycoris-dataset-editor")
         self.pack(fill=tk.BOTH, expand=True)
+
+        self.dir_path = "/run/media/t0b1maru/2TB_Drive/Pictures/Scraped"
 
         self.configure(bg='black')
 
@@ -27,6 +30,12 @@ class Application(tk.Frame):
         self.training_tab = tk.Frame(self.notebook, bg='black')
         self.notebook.add(self.training_tab, text="Training")
         self.create_training_tab()  # Initialize training tab
+
+        # New "Prepare" tab
+        self.prepare_tab = tk.Frame(self.notebook, bg='black')
+        self.notebook.add(self.prepare_tab, text="Prepare")
+        self.create_prepare_tab()
+        
 
     def create_editing_tab(self):
         self.directory = None
@@ -131,9 +140,7 @@ class Application(tk.Frame):
 
         self.update_config_list()
 
-        labels = ["Lora Name", "Network (dim)", "Network (alpha)", "Conv (dim)",
-                  "Conv (alpha)", "Batch size", "Epochs", "Bucket resolution", "Flip",
-                  "Shuffle Captions"]
+        labels = ["Lora Name", "Network (dim)", "Network (alpha)", "Conv (dim)", "Conv (alpha)", "Batch size", "Epochs", "Bucket resolution"]
 
         entries = {}
 
@@ -147,9 +154,13 @@ class Application(tk.Frame):
         self.lora_type.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.lora_type.current(0)  # Set the first option as default
 
+        right_side_started = False
         for i, label in enumerate(labels):
-            # Choose which frame to pack into based on the index
-            parent_frame = self.training_frame_left if i < len(labels) / 2 else self.training_frame_right
+            # Check if we have reached the label "Conv (dim)" and set the flag to True
+            if label == "Batch size":
+                right_side_started = True
+            # Choose which frame to pack into based on the flag
+            parent_frame = self.training_frame_right if right_side_started else self.training_frame_left
 
             frame = tk.Frame(parent_frame, bg='black')
             frame.pack(fill=tk.X)  # Use tk.X here to fill horizontally within the parent frame
@@ -162,7 +173,80 @@ class Application(tk.Frame):
             entries[label] = tk.Entry(frame, bg='#333333', fg='white', insertbackground='white')
             entries[label].pack(side=tk.LEFT, fill=tk.X, expand=True)
 
+
+        # Create flip label and button
+        flip_frame = tk.Frame(self.training_frame_right, bg='black')
+        flip_frame.pack(fill=tk.X)
+
+        flip_label = tk.Label(flip_frame, text="Flip:", bg='black', fg='white')
+        flip_label.pack(side=tk.LEFT)
+
+        self.flip_var = tk.BooleanVar()
+        flip_button = tk.Checkbutton(flip_frame, variable=self.flip_var, bg='black')
+        flip_button.pack(side=tk.LEFT)
+
+        # Create shuffle label and button
+        shuffle_frame = tk.Frame(self.training_frame_right, bg='black')
+        shuffle_frame.pack(fill=tk.X)
+
+        shuffle_label = tk.Label(shuffle_frame, text="Shuffle Captions:", bg='black', fg='white')
+        shuffle_label.pack(side=tk.LEFT)
+
+        self.shuffle_var = tk.BooleanVar()
+        shuffle_button = tk.Checkbutton(shuffle_frame, variable=self.shuffle_var, bg='black')
+        shuffle_button.pack(side=tk.LEFT)
+
         self.training_entries = entries  # Save references to entry widgets
+
+    def create_prepare_tab(self):
+        # New Section
+        new_label = ttk.Label(self.prepare_tab, text="New")
+        new_label.grid(row=0, column=0, padx=20, pady=10, sticky='w')
+        
+        self.new_param_entry = ttk.Entry(self.prepare_tab)
+        self.new_param_entry.grid(row=1, column=0, padx=20, pady=10, sticky='w')
+        
+        self.new_proceed_button = ttk.Button(self.prepare_tab, text="Generate", command=self.prepare_generate_action)
+        self.new_proceed_button.grid(row=1, column=1, padx=20, pady=10)
+        
+        # Folder Display and Update Section
+
+        folder_label = ttk.Label(self.prepare_tab, text="Current Folder:")
+        folder_label.grid(row=0, column=2, padx=20, pady=10, sticky='w')
+        
+        self.folder_display = ttk.Label(self.prepare_tab, text=self.dir_path)  # Using dir_path variable
+        self.folder_display.grid(row=1, column=2, padx=20, pady=10, sticky='w')
+        
+        update_button = ttk.Button(self.prepare_tab, text="Update", command=self.update_folder_path)
+        update_button.grid(row=2, column=2, padx=20, pady=10)
+
+    def update_folder_path(self):
+        # Use filedialog to select a new folder
+        new_folder = filedialog.askdirectory(title="Select Folder")
+        if new_folder:
+            self.dir_path = new_folder
+            self.folder_display.config(text=self.dir_path)
+            # Update any internal variable storing the folder path if needed
+
+    def prepare_generate_action(self):
+        folder_name = self.new_param_entry.get()  # Taking the folder name from the correct text field
+        if not folder_name:
+            messagebox.showerror("Error", "Folder name is empty!")
+            return
+
+        mainfolder = os.path.join(self.dir_path, folder_name)
+        imgfolder = os.path.join(mainfolder, "img")
+        specific_imgfolder = os.path.join(imgfolder, "1_" + folder_name)
+
+        # Creating the folders
+        try:
+            os.makedirs(os.path.join(mainfolder, "input"), exist_ok=True)
+            os.makedirs(specific_imgfolder, exist_ok=True)
+            messagebox.showinfo("Success", f"Directories created at: {mainfolder}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+
 
     def save_config(self):
         config_name = self.save_entry.get()
@@ -224,22 +308,14 @@ class Application(tk.Frame):
         self.drop_target.pack_forget()  # hide the drop target
 
     def refresh_fields(self):
-        # Remove previous text widgets
-        for widget in self.editing_tab.winfo_children():
-            widget.destroy()
-
-        # Create new text widgets
+        # Update the content of auto-generated text fields
         for file in self.files:
             with open(os.path.join(self.directory, file), 'r') as f:
                 content = f.read()
-            text_widget = tk.Entry(self.editing_tab, width=1, bg='#333333', fg='white', insertbackground='white')
-            text_widget.insert(tk.END, content)
-            text_widget.pack(fill=tk.X)
-
-            # Associate text_widget with its file
-            self.text_widgets[text_widget] = file
-
-        self.drop_target.pack_forget()  # Hide the drop target
+            if file in self.text_widgets:  # Check if the text field exists
+                text_widget = self.text_widgets[file]
+                text_widget.delete(0, tk.END)
+                text_widget.insert(tk.END, content)
 
     def clear(self):
         # Remove previous text widgets
@@ -259,12 +335,11 @@ class Application(tk.Frame):
         self.directory = None
         self.files = []
 
-
     def save_current(self):
         for widget, filename in self.text_widgets.items():
             with open(os.path.join(self.directory, filename), 'w') as f:
                 f.write(widget.get())
-
+                
     def replace_text(self):
         self.edit_text(self.entry.get(), self.replacement.get())
         self.refresh_fields()
@@ -276,6 +351,10 @@ class Application(tk.Frame):
     def append_text(self):
         self.edit_text("", "{content}" + self.append_prepend_entry.get())
         self.refresh_fields()
+
+    def edit_text(self, search_term, replacement):
+        if not self.directory or not self.files:
+            return
 
     def edit_text(self, search_term, replacement):
         if not self.directory or not self.files:
@@ -302,7 +381,13 @@ class Application(tk.Frame):
                 content = f.read()
             text_widget = tk.Entry(self.editing_tab, width=1, bg='#333333', fg='white', insertbackground='white')
             text_widget.insert(tk.END, content)
-            text_widget.pack(fill=tk.X)
+            text_widget.pack(fill=tk.X, padx=30)  # Add padding here
+
+            # Associate text_widget with its file
+            self.text_widgets[text_widget] = file
+
+        self.drop_target.pack_forget()  # Hide the drop target
+
 
 root = TkinterDnD.Tk()
 root.geometry("800x600")
